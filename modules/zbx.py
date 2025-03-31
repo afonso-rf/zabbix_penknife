@@ -119,10 +119,10 @@ def get_problems(
             if e.get("message"):
                 msg = e["message"].strip().replace("\n", "/")
                 msg = msg.replace("\r", "/")
-                msg = msg.replace(",", " | ")
+                # msg = msg.replace(",", " | ")
             messages.append(msg)
 
-        messages_join = ";".join(messages)
+        messages_join = "||".join(messages)
         clock = int(clock)
         r_clock = int(r_clock)
         delta = r_clock - clock
@@ -162,7 +162,14 @@ def get_events(
         try:
             event_results = zapi.event.get(
                 hostids=hostid,
-                output=["name", "clock", "r_eventid", "acknowledged", "value", "objectid"],
+                output=[
+                    "name",
+                    "clock",
+                    "r_eventid",
+                    "acknowledged",
+                    "value",
+                    "objectid",
+                ],
                 select_acknowledges=["message"],
                 time_from=time_from,
                 time_till=time_till,
@@ -191,10 +198,10 @@ def get_events(
                 if e.get("message"):
                     msg = e["message"].strip().replace("\n", "/")
                     msg = msg.replace("\r", "/")
-                    msg = msg.replace(",", " | ")
+                    # msg = msg.replace(",", " | ")
                 messages.append(msg)
 
-            messages_join = ";".join(messages)
+            messages_join = "||".join(messages)
             clock = int(event["clock"])
             info = {
                 "hostid": hostid,
@@ -204,7 +211,7 @@ def get_events(
                 "r_eventid": event["r_eventid"],
                 "ack": event["acknowledged"],
                 "messages": messages_join,
-                "objectid": event["objectid"]
+                "objectid": event["objectid"],
             }
 
             events.append(info)
@@ -367,7 +374,13 @@ class MyZabbix(ZabbixAPI):
         **kwargs,
     ) -> dict:
         parms = {
-            "output": ["host", "name", "status", "proxy_hostid"],
+            "output": [
+                "host",
+                "name",
+                "status",
+                "proxy_hostid",
+                "proxyid",
+            ],
             "selectParentTemplates": ["name"],
             "selectTags": ["tag", "value"],
             "selectMacros": ["macro", "value"],
@@ -378,7 +391,6 @@ class MyZabbix(ZabbixAPI):
             "filter": filters,
             **kwargs,
         }
-        
 
         if self.__zbx_version > 6:
             parms["selectHostGroups"] = ["name", "groupid"]  # Zabbix >=6.0
@@ -412,51 +424,53 @@ class MyZabbix(ZabbixAPI):
 
         return hosts
 
-    def _host_info(self, **host_get_return: dict) -> dict:
+    def _host_info(self, delimiter=",", **host_get_return: dict) -> dict:
         host = {
             "hostid": host_get_return["hostid"],
             "host": host_get_return["host"],
             "name": host_get_return["name"],
             "status": "enabled" if host_get_return["status"] == "0" else "disabled",
+            "proxyid": host_get_return.get("proxy_hostid")
+            or host_get_return.get("proxyid"),
             # "tags": "",
             # "macros": "",
         }
 
         templates = [i["name"] for i in host_get_return["parentTemplates"]]
-        host["templates"] = ";".join(templates)
+        host["templates"] = delimiter.join(templates)
 
         if host_get_return.get("hostgroups"):
             groups = [i["name"] for i in host_get_return["hostgroups"]]
         else:
             groups = [i["name"] for i in host_get_return["groups"]]  # Zabbix <=6.0
-        host["hostgroups"] = ";".join(groups)
+        host["hostgroups"] = delimiter.join(groups)
 
         macros = []
         for macro in host_get_return["macros"]:
             macros.append(f"{macro['macro']}={macro['value']}")
-        host["macros"] = ";".join(macros)
+        host["macros"] = delimiter.join(macros)
 
         tags = []
         for tag in host_get_return["tags"]:
             tags.append(f"{tag['tag']}={tag['value']}")
-        host["tags"] = ";".join(tags)
+        host["tags"] = delimiter.join(tags)
 
         return host
 
-    def get_interface(self, get_hosts_return: dict["hostid": dict]) -> None:
+    def get_interface(self, get_hosts_return: dict["hostid":dict]) -> None:
         hosts = get_hosts_return
-        hostid_list = [i for i in hosts.keys()]
+        hostid_list = [*hosts.keys()]
         count = 0
-        while True:    
+        while True:
             try:
-                result = self.hostinterface.get(
+                _result = self.hostinterface.get(
                     hostids=hostid_list,
                     output=["hostid", "ip", "dns"],
                 )
-                
-                for i in result:
-                    ip = i.get("ip") or i.get("dns")
-                    hosts[i["hostid"]]["ip"] = ip
+
+                for i in _result:
+                    ip = i["ip"] if bool(i["ip"]) else i["dns"]
+                    hosts[i["hostid"]]["ip"] = ip if ip else 0
                 break
             except Exception as error:
                 print(error)
@@ -466,7 +480,7 @@ class MyZabbix(ZabbixAPI):
                     break
                 sleep(2)
         # return hosts
-        
+
     def get_month_problems(
         self,
         host: dict,
@@ -487,7 +501,15 @@ class MyZabbix(ZabbixAPI):
             try:
                 problems_result = self.event.get(
                     hostids=hostid,
-                    output=["name", "clock", "r_eventid", "acknowledged", "value", "object", "objectid"],
+                    output=[
+                        "name",
+                        "clock",
+                        "r_eventid",
+                        "acknowledged",
+                        "value",
+                        "object",
+                        "objectid",
+                    ],
                     select_acknowledges=["message"],
                     problem_time_from=time_from,
                     problem_time_till=time_till,
@@ -518,11 +540,11 @@ class MyZabbix(ZabbixAPI):
                 if e.get("message"):
                     msg = e["message"].strip().replace("\n", "/")
                     msg = msg.replace("\r", "/")
-                    msg = msg.replace(",", " | ")
+                    # msg = msg.replace(",", " | ")
                 messages.append(msg)
 
-            messages_join = ";".join(messages)
-            
+            messages_join = "||".join(messages)
+
             info = {
                 "host": host["name"],
                 "hostid": hostid,
@@ -538,7 +560,7 @@ class MyZabbix(ZabbixAPI):
 
             problems[problem["eventid"]] = info
         return problems
-    
+
     def get_month_problems_resolved(
         self,
         host: dict,
@@ -581,7 +603,7 @@ class MyZabbix(ZabbixAPI):
         problems_resolved = dict()
         for problem in _problems_result:
             problems_resolved[problem["eventid"]] = problem
-   
+
         return problems_resolved
 
     def get_month_events(
@@ -632,10 +654,10 @@ class MyZabbix(ZabbixAPI):
                     if e.get("message"):
                         msg = e["message"].strip().replace("\n", "/")
                         msg = msg.replace("\r", "/")
-                        msg = msg.replace(",", " | ")
+                        # msg = msg.replace(",", " | ")
                     messages.append(msg)
 
-                messages_join = ";".join(messages)
+                messages_join = "||".join(messages)
                 clock = int(event["clock"])
                 info = {
                     "hostid": hostid,
@@ -689,7 +711,7 @@ class MyZabbix(ZabbixAPI):
                     event_results = []
                     break
                 sleep(2)
-            
+
         if len(event_results) > 0:
             print("aqui")
             for event in event_results:
@@ -699,10 +721,10 @@ class MyZabbix(ZabbixAPI):
                     if e.get("message"):
                         msg = e["message"].strip().replace("\n", "/")
                         msg = msg.replace("\r", "/")
-                        msg = msg.replace(",", " | ")
+                        # msg = msg.replace(",", " | ")
                     messages.append(msg)
 
-                messages_join = ";".join(messages)
+                messages_join = "||".join(messages)
                 clock = int(event["clock"])
                 events[event["eventid"]] = {
                     "hostid": hostid,

@@ -48,7 +48,7 @@ def zbx_user_delete(users_list: list, url: str, api_token=None):
     for user in users_list:
         fullname = user[0].strip()
         email = user[1].strip().lower()
-        username = email.split("@")[0]
+        username = email.split("@")[0] if "@alloha.com" in email else email
 
         if username not in result:
             result[username] = {}

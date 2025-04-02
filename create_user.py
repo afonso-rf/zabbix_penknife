@@ -21,8 +21,8 @@ def zbx_user_create(zapi, users_list: list):
     for user in users_list:
         fullname = user[0].strip().split()
         email = user[1].strip().lower()
-        user_role = user[2].strip()
-        user_group = user[3].strip()
+        user_group = user[2].strip()
+        user_role = user[3].strip()
 
         username = email.split("@")[0] if "@alloha.com" in email else email
         passwd = (
